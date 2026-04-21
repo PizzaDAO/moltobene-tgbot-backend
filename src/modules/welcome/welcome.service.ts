@@ -293,6 +293,11 @@ export class WelcomeService {
     );
   }
 
+  @Command('chatid')
+  async handleChatId(ctx: Context) {
+    await ctx.reply(`Chat ID: \`${ctx.chat?.id}\``, { parse_mode: 'Markdown' });
+  }
+
   /**
    * Handles new user registration process
    * @param {Context} ctx - The Telegraf context object

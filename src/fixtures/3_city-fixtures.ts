@@ -25,7 +25,7 @@ export async function seed(knex: Knex): Promise<void> {
 
     // Abidjan
     {
-      name: 'Ivory Coast',
+      name: 'Abidjan',
       country_id: countryMap['Abidjan'],
       group_id: -4743402147,
       telegram_link: 'https://t.me/+JWOR_uVzisw3NWZk',
@@ -38,7 +38,7 @@ export async function seed(knex: Knex): Promise<void> {
     //   telegram_link: null,
     // },
     {
-      name: 'Mazar-i-Sharif',
+      name: 'Mazar-e-Sharif',
       country_id: countryMap['Afghanistan'],
       group_id: -1002068411229,
       telegram_link: 'https://t.me/+Q8ChxoCFslAzMzFh',
@@ -71,7 +71,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+oK58UluVeuFhZjgx',
     },
     {
-      name: 'Entre Rios',
+      name: 'Gualeguaychú Entre Ríos',
       country_id: countryMap['Argentina'],
       group_id: -4756690061,
       telegram_link: 'https://t.me/+kK8avIREGho1MWQ5',
@@ -256,7 +256,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+wGJjX7piV4gzM2Nh',
     },
     {
-      name: 'Buzios',
+      name: 'Búzios',
       country_id: countryMap['Brazil'],
       group_id: -4687749004,
       telegram_link: 'https://t.me/+WlqFgKPYcjJhMTFh',
@@ -560,7 +560,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+5jv65SAxeu5jYzhh',
     },
     {
-      name: 'Cartagena',
+      name: 'Cartagena de Indias',
       country_id: countryMap['Colombia'],
       group_id: -1002182199547,
       telegram_link: 'https://t.me/+KKC3CCLGYX03Y2M5',
@@ -1562,7 +1562,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+Qty6hBmar21kNmIx',
     },
     {
-      name: 'Mérida',
+      name: 'Merida',
       country_id: countryMap['Mexico'],
       group_id: -1002355994780,
       telegram_link: 'https://t.me/+s6gJ8AnpYx0zYjgx',
@@ -1644,7 +1644,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+bZT_3pcvEWtiOTkx',
     },
     {
-      name: 'Marrakesh',
+      name: 'Marrakech',
       country_id: countryMap['Morocco'],
       group_id: -1002371010885,
       telegram_link: 'https://t.me/+ACv3eoIimYIzYzYx',
@@ -1820,7 +1820,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+nPtJoG7-JMM1Yjgx',
     },
     {
-      name: 'Enugu',
+      name: 'Enugu City',
       country_id: countryMap['Nigeria'],
       group_id: -1001886670148,
       telegram_link: 'https://t.me/+FN-o8aMZhjJmOTcx',
@@ -1838,7 +1838,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+CKxe32vDKyVkMDcx',
     },
     {
-      name: 'Keffi, Nasarawa state',
+      name: 'Keffi',
       country_id: countryMap['Nigeria'],
       group_id: -4712909471,
       telegram_link: 'https://t.me/+mM8wP6FZZFZmOWIx',
@@ -1856,7 +1856,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+zOdAqKYVfYZjYTMx',
     },
     {
-      name: 'Lokoja',
+      name: 'Lokoja City',
       country_id: countryMap['Nigeria'],
       group_id: -4706102647,
       telegram_link: 'https://t.me/+Ox5H1huZpjdiMjUx',
@@ -1938,14 +1938,14 @@ export async function seed(knex: Knex): Promise<void> {
     },
     // Panama
     {
-      name: 'Ciudad de Panama',
+      name: 'Panama City',
       country_id: countryMap['Panama'],
       group_id: -4750445540,
       telegram_link: 'https://t.me/+hhdQmJ8qtiE5ZTE5',
     },
     // Peru
     {
-      name: 'Cusco',
+      name: 'Cuzco',
       country_id: countryMap['Peru'],
       group_id: -4121520945,
       telegram_link: 'https://t.me/+M1MwSfps-WU5MjMx',
@@ -2186,7 +2186,7 @@ export async function seed(knex: Knex): Promise<void> {
     },
     // Slovenia
     {
-      name: 'Llubjana',
+      name: 'Ljubljana',
       country_id: countryMap['Slovenia'],
       group_id: -1002477120506,
       telegram_link: 'https://t.me/+F7IlQDeSEgU4NTBh',
@@ -2224,7 +2224,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+3RnvXOt6f4szMGEx',
     },
     {
-      name: 'Gran Canaria',
+      name: 'Las Palmas de Gran Canaria',
       country_id: countryMap['Spain'],
       group_id: -4737102391,
       telegram_link: 'https://t.me/+o0uLz-mAh0g2NTMx',
@@ -2242,7 +2242,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+6CS2vjriPNJhMDQx',
     },
     {
-      name: 'Malaga',
+      name: 'Málaga',
       country_id: countryMap['Spain'],
       group_id: -1002689164265,
       telegram_link: 'https://t.me/+Br0YD2x4qFAzOWQx',
@@ -2448,7 +2448,7 @@ export async function seed(knex: Knex): Promise<void> {
       telegram_link: 'https://t.me/+5-RwsDjsWkY2MDUx',
     },
     {
-      name: 'Montgomery',
+      name: 'Montgomery, AL',
       country_id: countryMap['USA AL'],
       group_id: -1002622509517,
       telegram_link: 'https://t.me/+2Uq2tmJtvuYwNzQx',
@@ -2798,7 +2798,7 @@ export async function seed(knex: Knex): Promise<void> {
     },
     // USA NJ
     {
-      name: 'Atlantic City, NJ',
+      name: 'Atlantic City',
       country_id: countryMap['USA NJ'],
       group_id: -4154984838,
       telegram_link: 'https://t.me/+rGtfdMLxF_4zOTZh',
@@ -2876,7 +2876,7 @@ export async function seed(knex: Knex): Promise<void> {
     },
     // USA OR
     {
-      name: 'Portland OR',
+      name: 'Portland Oregon',
       country_id: countryMap['USA OR'],
       group_id: -1001825156130,
       telegram_link: 'https://t.me/+wjMKnf-PjZliZDFh',
@@ -2961,7 +2961,7 @@ export async function seed(knex: Knex): Promise<void> {
     },
     // USA VA
     {
-      name: 'Richmond',
+      name: 'Richmond Virginia',
       country_id: countryMap['USA VA'],
       group_id: -4623578295,
       telegram_link: 'https://t.me/+vKktl1TNLJBlZmYx',

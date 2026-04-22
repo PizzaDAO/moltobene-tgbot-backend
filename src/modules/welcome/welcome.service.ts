@@ -295,7 +295,29 @@ export class WelcomeService {
 
   @Command('chatid')
   async handleChatId(ctx: Context) {
-    await ctx.reply(`Chat ID: \`${ctx.chat?.id}\``, { parse_mode: 'Markdown' });
+    const chatId = ctx.chat?.id;
+    const userMessageId = ctx.message?.message_id;
+
+    if (!chatId) return;
+
+    const botResponse = await ctx.reply(`Chat ID: \`${chatId}\``, {
+      parse_mode: 'Markdown',
+    });
+
+    setTimeout(() => {
+      void (async () => {
+        try {
+          if (userMessageId) {
+            await ctx.telegram.deleteMessage(chatId, userMessageId).catch(() => {
+              // Ignore failure if bot isn't admin
+            });
+          }
+          await ctx.telegram.deleteMessage(chatId, botResponse.message_id);
+        } catch (error) {
+          console.error('Failed to auto-delete chatid messages:', error);
+        }
+      })();
+    }, 30000);
   }
 
   /**

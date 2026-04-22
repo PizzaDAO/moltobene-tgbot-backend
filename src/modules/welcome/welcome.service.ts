@@ -1067,7 +1067,7 @@ export class WelcomeService {
 
     try {
       const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 50,
@@ -1104,7 +1104,7 @@ export class WelcomeService {
 
     try {
       const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0,
         max_tokens: 5,
@@ -1130,7 +1130,7 @@ export class WelcomeService {
 
     try {
       const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0,
         max_tokens: 5,

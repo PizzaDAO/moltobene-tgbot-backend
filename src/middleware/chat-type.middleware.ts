@@ -52,6 +52,17 @@ export class PrivateChatMiddleware {
         return next();
       }
 
+      // Allow /chatid in any chat type
+      if (
+        ctx.message &&
+        typeof ctx.message === 'object' &&
+        'text' in ctx.message &&
+        typeof ctx.message.text === 'string' &&
+        ctx.message.text.startsWith('/chatid')
+      ) {
+        return next();
+      }
+
       // Send a message to /start command in groups
       if (
         ctx.chat?.type !== 'private' &&

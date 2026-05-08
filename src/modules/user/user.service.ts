@@ -105,4 +105,13 @@ export class UserService {
 
     return !!existingPizzaName;
   }
+
+  async isDiscordNameExists(discordName: string): Promise<boolean> {
+    const existing: IUser | undefined = await this.knexService
+      .knex<IUser>('user')
+      .where('discord_name', discordName)
+      .first();
+
+    return !!existing;
+  }
 }

@@ -164,6 +164,7 @@ export class WelcomeService {
         reply_markup: {
           inline_keyboard: [
             [{ text: 'Yes I have a Pizza Name 🍕', callback_data: 'has_pizza_name' }],
+            [{ text: "I don't have a Pizza Name 🍕", url: 'https://pizzadao.org/' }],
             [
               {
                 text: 'Join Discord',
@@ -1185,7 +1186,18 @@ export class WelcomeService {
       });
     } else if (step === 'discord_username') {
       if ('text' in ctx.message!) {
-        userData.discord_name = ctx.message.text;
+        const enteredDiscordName = ctx.message.text;
+
+        const isDuplicate = await this.userService.isDiscordNameExists(enteredDiscordName);
+        if (isDuplicate) {
+          await ctx.reply(
+            `❌ The Discord username *${enteredDiscordName}* is already registered\\. Please enter a different one:`,
+            { reply_markup: { force_reply: true }, parse_mode: 'MarkdownV2' },
+          );
+          return;
+        }
+
+        userData.discord_name = enteredDiscordName;
       } else {
         await ctx.reply('Invalid input. Please provide a valid Discord username.');
         return;

@@ -13,9 +13,9 @@ import { MembershipService } from '../membership/membership.service';
 import { CommonService } from '../common/common.service';
 import { IUser } from '../user/user.interface';
 import { IUserRegistrationData } from './welcome.interface';
-import OpenAI from 'openai';
 import { getContextTelegramUserId } from 'src/utils/context';
 import axios from 'axios';
+import OpenAI from 'openai';
 
 /**
  * Service class that handles all welcome-related functionality
@@ -26,9 +26,6 @@ import axios from 'axios';
 @Update()
 @Injectable()
 export class WelcomeService {
-  /** OpenAI instance for generating pizza names */
-  private readonly openAi: OpenAI;
-
   /** Collection of welcome messages with placeholders for pizza name and group name */
   private readonly welcomeMessages: string[] = [
     '🍕 Welcome <pizza_name> to <group_name> Chat! The crust is strong with this one.',
@@ -61,6 +58,11 @@ export class WelcomeService {
   /** Map to store user registration data during the registration process */
   private userGroupMap = new Map<string, IUserRegistrationData>();
 
+  private readonly openAi: OpenAI | null =
+    process.env.PIZZA_NAME_GENERATION_ENABLED === 'true' && process.env.OPENAI_API_KEY
+      ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      : null;
+
   /**
    * Creates an instance of WelcomeService
    * @param {UserService} userService - Service for user management
@@ -76,11 +78,7 @@ export class WelcomeService {
     private readonly membershipService: MembershipService,
     @Inject(forwardRef(() => CommonService))
     private readonly commonService: CommonService,
-  ) {
-    this.openAi = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
+  ) {}
 
   /**
    * Handles the /start command from users
@@ -172,13 +170,15 @@ export class WelcomeService {
         reply_markup: {
           inline_keyboard: [
             [{ text: 'Yes I have a Pizza Name 🍕', callback_data: 'has_pizza_name' }],
+            ...(this.openAi
+              ? [[{ text: 'Generate a Pizza Name 🤖', callback_data: 'give_me_pizza_name' }]]
+              : [[{ text: "I don't have a Pizza Name 🍕", url: 'https://pizzadao.org/' }]]),
             [
               {
                 text: 'Join Discord',
                 url: 'https://discord.gg/rwthAq3e?event=1366460552074756220',
               },
             ],
-            [{ text: 'Give me a Pizza Name', callback_data: 'give_me_pizza_name' }],
           ],
         },
         parse_mode: 'MarkdownV2',
@@ -190,7 +190,13 @@ export class WelcomeService {
         await this.handleProfile(ctx);
       } else {
         if (!process.env.WELCOME_VIDEO_ID) {
-          await ctx.reply('❌ Welcome video is not available.');
+          await ctx.reply('❌ Welcome video is not available.', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Explore Party Cities 🎉', callback_data: 'explore_cities' }],
+              ],
+            },
+          });
           return;
         }
         await ctx.telegram.sendVideo(ctx.chat?.id ?? 0, process.env.WELCOME_VIDEO_ID, {
@@ -622,17 +628,15 @@ export class WelcomeService {
       });
     }
 
-    // CallBackQuery[Register User]: Handle 'Give me a Pizza Name' button
-    if (callbackData === 'give_me_pizza_name') {
+    // CallBackQuery[Register User]: Handle 'Generate a Pizza Name' button (only when feature is enabled)
+    if (callbackData === 'give_me_pizza_name' && this.openAi) {
       await ctx.deleteMessage();
       await this.commonService.setUserState(Number(userId), {
         flow: 'welcome',
         step: 'pizza_topping',
       });
       await ctx.reply('🍕 *What is your favorite pizza topping?*', {
-        reply_markup: {
-          force_reply: true,
-        },
+        reply_markup: { force_reply: true },
         parse_mode: 'MarkdownV2',
       });
     }
@@ -1069,110 +1073,6 @@ export class WelcomeService {
   }
 
   /**
-   * Generates a pizza name using OpenAI
-   * @param {string} pizzaTopping - The user's preferred pizza topping
-   * @param {string} mafiaMovie - The user's favorite mafia movie
-   * @param {string} [existingPizzaName] - Optional existing pizza name to avoid duplicates
-   * @param {number} [attempt=1] - Current attempt number for name generation
-   * @returns {Promise<string | null>} The generated pizza name or null if generation fails
-   * @private
-   */
-  private async generatePizzaName(
-    pizzaTopping: string,
-    mafiaMovie: string,
-    existingPizzaName?: string,
-    attempt: number = 1,
-  ): Promise<string | null> {
-    if (attempt > 5) {
-      console.warn('Exceeded maximum attempts to generate a unique pizza name.');
-      return null; // Return null if the recursion limit is reached
-    }
-
-    const prompt = `Come up with a fun and creative pizza name by combining the topping "${pizzaTopping}" with a last name of a cast member from the mafia movie "${mafiaMovie}". Randomize the chosen character from this number ${new Date().getTime()}. Use the topping as the first name and the last name of a cast member from the movie as the surname. Make it sound like a quirky mafia-style name.${
-      existingPizzaName ? ` Avoid using the existing pizza name "${existingPizzaName}".` : ''
-    } Just output the name without quotes.`;
-
-    try {
-      const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 50,
-      });
-
-      const generatedPizzaName =
-        response.choices[0]?.message?.content?.trim() || 'Unknown Pizza Name';
-
-      const isPizzaNameExists = await this.userService.isPizzaNameExists(generatedPizzaName);
-
-      if (isPizzaNameExists && existingPizzaName === generatedPizzaName) {
-        return null;
-      }
-
-      if (isPizzaNameExists) {
-        return this.generatePizzaName(pizzaTopping, mafiaMovie, generatedPizzaName, attempt + 1);
-      }
-
-      return generatedPizzaName;
-    } catch (error) {
-      console.error('Error generating pizza name:', error);
-      return 'Unknown Pizza Name';
-    }
-  }
-
-  /**
-   * Validates if a movie name is a valid mafia movie
-   * @param {string} movieName - The movie name to validate
-   * @returns {Promise<boolean>} True if the movie is valid, false otherwise
-   * @private
-   */
-  private async validateMafiaMovie(movieName: string): Promise<boolean> {
-    const prompt = `is ${movieName} a mafia movie, output only 'yes' or 'no'`;
-
-    try {
-      const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0,
-        max_tokens: 5,
-      });
-
-      const result = response.choices[0]?.message?.content?.trim().toLowerCase();
-
-      return result === 'yes';
-    } catch (error) {
-      console.error('Error validating mafia movie:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Validates if a pizza topping is valid
-   * @param {string} pizzaTopping - The pizza topping to validate
-   * @returns {Promise<boolean>} True if the topping is valid, false otherwise
-   * @private
-   */
-  private async validatePizzaTopping(pizzaTopping: string): Promise<boolean> {
-    const prompt = `is ${pizzaTopping} a pizza topping, output only 'yes' or 'no'`;
-
-    try {
-      const response = await this.openAi.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0,
-        max_tokens: 5,
-      });
-
-      const result = response.choices[0]?.message?.content?.trim().toLowerCase();
-
-      return result === 'yes';
-    } catch (error) {
-      console.error('Error validating mafia movie:', error);
-      return false;
-    }
-  }
-
-  /**
    * Handles region selection
    * @param {Context} ctx - The Telegraf context object
    * @returns {Promise<void>}
@@ -1307,142 +1207,184 @@ export class WelcomeService {
       });
     } else if (step === 'discord_username') {
       if ('text' in ctx.message!) {
-        userData.discord_name = ctx.message.text;
+        const enteredDiscordName = ctx.message.text;
+
+        const isDuplicate = await this.userService.isDiscordNameExists(enteredDiscordName);
+        if (isDuplicate) {
+          await ctx.reply(
+            `❌ The Discord username *${enteredDiscordName}* is already registered\\. Please enter a different one:`,
+            { reply_markup: { force_reply: true }, parse_mode: 'MarkdownV2' },
+          );
+          return;
+        }
+
+        userData.discord_name = enteredDiscordName;
       } else {
         await ctx.reply('Invalid input. Please provide a valid Discord username.');
         return;
       }
 
       await this.handleNinjaTurtleMessage(ctx);
-    } else if (step === 'pizza_topping') {
-      if ('text' in ctx.message!) {
-        const enteredPizzaTopping = ctx.message.text;
-
-        const isValidPizzaTopping = await this.validatePizzaTopping(enteredPizzaTopping);
-
-        if (!isValidPizzaTopping) {
-          await ctx.reply(
-            '❌ What you entered is not a pizza topping. Please choose something else.',
-          );
-          await ctx.reply('🍕 *What is your favorite pizza topping?*', {
-            reply_markup: {
-              force_reply: true,
-            },
-            parse_mode: 'MarkdownV2',
-          });
-          return;
-        }
-
-        userData.pizza_topping = enteredPizzaTopping;
-      } else {
+    } else if (step === 'pizza_topping' && this.openAi) {
+      if (!('text' in ctx.message!)) {
         await ctx.reply('Invalid input. Please provide a valid name.');
         return;
       }
+
+      const enteredPizzaTopping = ctx.message.text;
+      const isValidPizzaTopping = await this.validatePizzaTopping(enteredPizzaTopping);
+
+      if (!isValidPizzaTopping) {
+        await ctx.reply('❌ What you entered is not a pizza topping. Please choose something else.');
+        await ctx.reply('🍕 *What is your favorite pizza topping?*', {
+          reply_markup: { force_reply: true },
+          parse_mode: 'MarkdownV2',
+        });
+        return;
+      }
+
+      if (userData) userData.pizza_topping = enteredPizzaTopping;
+
       await this.commonService.setUserState(Number(userId), {
         flow: 'welcome',
         step: 'enter_mafia_movie',
       });
       await ctx.reply('🎥 *What is your favorite Mafia movie?*', {
-        reply_markup: {
-          force_reply: true,
-        },
+        reply_markup: { force_reply: true },
         parse_mode: 'MarkdownV2',
       });
-    } else if (step === 'enter_mafia_movie') {
-      if ('text' in ctx.message!) {
-        const enteredMovie = ctx.message.text;
-
-        const isValidMafiaMovie = await this.validateMafiaMovie(enteredMovie);
-
-        if (!isValidMafiaMovie) {
-          await ctx.reply(
-            '❌ What you entered is not a mafia movie. Please choose something else.',
-          );
-          await ctx.reply('🎥 *What is your favorite Mafia movie?*', {
-            reply_markup: {
-              force_reply: true,
-            },
-            parse_mode: 'MarkdownV2',
-          });
-          return;
-        }
-
-        // If valid, save the movie and proceed
-        userData.mafia_movie = enteredMovie;
-
-        await this.handlePizzaNameGeneration(ctx);
-      } else {
+    } else if (step === 'enter_mafia_movie' && this.openAi) {
+      if (!('text' in ctx.message!)) {
         await ctx.reply('Invalid input. Please provide a valid topping name.');
         return;
       }
+
+      const enteredMovie = ctx.message.text;
+      const isValidMafiaMovie = await this.validateMafiaMovie(enteredMovie);
+
+      if (!isValidMafiaMovie) {
+        await ctx.reply('❌ What you entered is not a mafia movie. Please choose something else.');
+        await ctx.reply('🎥 *What is your favorite Mafia movie?*', {
+          reply_markup: { force_reply: true },
+          parse_mode: 'MarkdownV2',
+        });
+        return;
+      }
+
+      if (userData) userData.mafia_movie = enteredMovie;
+      await this.handlePizzaNameGeneration(ctx);
     }
   }
 
-  /**
-   * Handles pizza name generation process
-   * @param {Context} ctx - The Telegraf context object
-   * @returns {Promise<void>}
-   * @description Manages the generation of pizza names using OpenAI
-   */
+  private async generatePizzaName(
+    pizzaTopping: string,
+    mafiaMovie: string,
+    existingPizzaName?: string,
+    attempt: number = 1,
+  ): Promise<string | null> {
+    if (!this.openAi || attempt > 5) return null;
+
+    const prompt = `Come up with a fun and creative pizza name by combining the topping "${pizzaTopping}" with a last name of a cast member from the mafia movie "${mafiaMovie}". Randomize the chosen character from this number ${new Date().getTime()}. Use the topping as the first name and the last name of a cast member from the movie as the surname. Make it sound like a quirky mafia-style name.${
+      existingPizzaName ? ` Avoid using the existing pizza name "${existingPizzaName}".` : ''
+    } Just output the name without quotes.`;
+
+    try {
+      const response = await this.openAi.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 50,
+      });
+
+      const generatedPizzaName = response.choices[0]?.message?.content?.trim() || 'Unknown Pizza Name';
+      const isPizzaNameExists = await this.userService.isPizzaNameExists(generatedPizzaName);
+
+      if (isPizzaNameExists && existingPizzaName === generatedPizzaName) return null;
+      if (isPizzaNameExists) {
+        return this.generatePizzaName(pizzaTopping, mafiaMovie, generatedPizzaName, attempt + 1);
+      }
+
+      return generatedPizzaName;
+    } catch (error) {
+      console.error('Error generating pizza name:', error);
+      return null;
+    }
+  }
+
+  private async validateMafiaMovie(movieName: string): Promise<boolean> {
+    if (!this.openAi) return false;
+    try {
+      const response = await this.openAi.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: `is ${movieName} a mafia movie, output only 'yes' or 'no'` }],
+        temperature: 0,
+        max_tokens: 5,
+      });
+      return response.choices[0]?.message?.content?.trim().toLowerCase() === 'yes';
+    } catch (error) {
+      console.error('Error validating mafia movie:', error);
+      return false;
+    }
+  }
+
+  private async validatePizzaTopping(pizzaTopping: string): Promise<boolean> {
+    if (!this.openAi) return false;
+    try {
+      const response = await this.openAi.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: `is ${pizzaTopping} a pizza topping, output only 'yes' or 'no'` }],
+        temperature: 0,
+        max_tokens: 5,
+      });
+      return response.choices[0]?.message?.content?.trim().toLowerCase() === 'yes';
+    } catch (error) {
+      console.error('Error validating pizza topping:', error);
+      return false;
+    }
+  }
+
   async handlePizzaNameGeneration(ctx: Context) {
     const userId = getContextTelegramUserId(ctx);
-    if (!userId) return;
+    if (!userId || !this.openAi) return;
 
     const userData = this.userGroupMap.get(userId);
     if (!userData) return;
 
     const { tg_first_name, pizza_topping, mafia_movie } = userData;
-
     if (!tg_first_name || !pizza_topping || !mafia_movie) {
       await ctx.reply('❌ Missing required information to generate a pizza name.');
       return;
     }
 
     const generatingMessage = await ctx.reply('🤖 Generating your pizza name...');
-
-    // Generate the pizza name
     const pizzaName = await this.generatePizzaName(pizza_topping, mafia_movie);
 
     if (!pizzaName) {
       await ctx.telegram.deleteMessage(ctx.chat?.id || 0, generatingMessage.message_id);
-      await ctx.reply(
-        '❌ Failed to generate a unique pizza name. Please try again with another topping or mafia movie.',
-      );
-      await this.commonService.setUserState(Number(userId), {
-        flow: 'welcome',
-        step: 'pizza_topping',
-      });
+      await ctx.reply('❌ Failed to generate a unique pizza name. Please try again with another topping or mafia movie.');
+      await this.commonService.setUserState(Number(userId), { flow: 'welcome', step: 'pizza_topping' });
       await ctx.reply('🍕 *What is your favorite pizza topping?*', {
-        reply_markup: {
-          force_reply: true,
-        },
+        reply_markup: { force_reply: true },
         parse_mode: 'MarkdownV2',
       });
       return;
     }
 
-    // Save the pizza name in the user data
     userData.pizza_name = pizzaName;
-
-    // Send the pizza name message
     await ctx.telegram.deleteMessage(ctx.chat?.id || 0, generatingMessage.message_id);
     const message = await ctx.reply(
-      `🍕 Here's your AI-generated Pizza Name by Molto Benne:\n\n` + `Pizza Name: *${pizzaName}*`,
-      {
-        parse_mode: 'Markdown',
-      },
+      `🍕 Here's your AI-generated Pizza Name by Molto Benne:\n\nPizza Name: *${pizzaName}*`,
+      { parse_mode: 'Markdown' },
     );
 
-    // Pin the message in the chat
     try {
       await ctx.telegram.pinChatMessage(ctx.chat?.id || 0, message.message_id, {
-        disable_notification: true, // Set to false if you want to notify users
+        disable_notification: true,
       });
     } catch (error) {
       console.error('Failed to pin the message:', error);
     }
 
-    // Delay the call to handleNinjaTurtleMessage by 3 seconds
     setTimeout(() => {
       void this.handleNinjaTurtleMessage(ctx);
     }, 3000);

@@ -42,6 +42,7 @@
     "knex": "^3.1.0",
     "nest-knexjs": "^0.0.26",
     "nestjs-telegraf": "^2.9.1",
+    "openai": "^4.98.0",
     "pg": "^8.15.6",
     "reflect-metadata": "^0.2.2",
     "run-cache": "^1.6.1",

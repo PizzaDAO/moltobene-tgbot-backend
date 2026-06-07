@@ -185,6 +185,40 @@ export class WelcomeService {
       });
 
       return;
+    } else if (startPayload && startPayload.startsWith('rsvp_')) {
+      // Deep link from rsvpizza: link this Telegram chat to a host's event so they
+      // receive PizzaDAO host announcements. Confirms the link back to rsvpizza.
+      const token = startPayload.slice(5);
+      const chatId = ctx.from?.id;
+
+      try {
+        const response = await axios.post(
+          `${process.env.RSVPIZZA_BASE_URL}/api/telegram/link-host`,
+          { token, chatId },
+          {
+            headers: { 'x-api-key': process.env.TELEGRAM_LINK_CALLBACK_SECRET ?? '' },
+          },
+        );
+
+        const data = (response.data ?? {}) as { ok?: boolean; partyName?: string };
+
+        if (data.ok) {
+          await ctx.reply(
+            "✅ Connected — you'll now receive PizzaDAO host announcements.",
+          );
+        } else {
+          await ctx.reply(
+            'That link is invalid or expired — ask your underboss for a fresh one.',
+          );
+        }
+      } catch (error) {
+        console.error('Failed to link rsvpizza host via deep link:', error);
+        await ctx.reply(
+          'That link is invalid or expired — ask your underboss for a fresh one.',
+        );
+      }
+
+      return;
     } else {
       if (await this.userService.isUserRegistered(userId)) {
         await this.handleProfile(ctx);

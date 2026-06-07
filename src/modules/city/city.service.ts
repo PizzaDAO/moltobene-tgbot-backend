@@ -41,6 +41,30 @@ export class CityService {
   }
 
   /**
+   * Retrieves all cities including their Telegram group id and link
+   * @returns {Promise<ICity[]>} Array of all cities with `group_id` + `telegram_link`
+   * @description Like {@link getAllCities} but also selects `telegram_link`, used by
+   * the `/city/groups` export endpoint. Cached separately under its own key.
+   */
+  async getAllCitiesWithLinks(): Promise<ICity[]> {
+    const cacheKey = 'cities:all:with_links';
+
+    const cachedCities = await RunCache.get(cacheKey);
+
+    if (cachedCities) {
+      return JSON.parse(cachedCities as string) as ICity[];
+    }
+
+    const cities = await this.knexService
+      .knex<ICity>('city')
+      .select('id', 'name', 'group_id', 'telegram_link', 'country_id');
+
+    await RunCache.set({ key: cacheKey, value: JSON.stringify(cities) });
+
+    return cities;
+  }
+
+  /**
    * Retrieves all cities in a specific country
    * @param {string} countryId - The ID of the country
    * @returns {Promise<ICity[]>} Array of cities in the country

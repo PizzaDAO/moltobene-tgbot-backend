@@ -5,7 +5,10 @@
 
 import { Module } from '@nestjs/common';
 import { CityService } from './city.service';
+import { CityController } from './city.controller';
 import { KnexModule } from '../knex/knex.module';
+import { CountryModule } from '../country/country.module';
+import { RegionModule } from '../region/region.module';
 
 /**
  * Module for managing city data and operations
@@ -14,8 +17,9 @@ import { KnexModule } from '../knex/knex.module';
  * cities by country and managing city data
  */
 @Module({
-  imports: [KnexModule],
+  imports: [KnexModule, CountryModule, RegionModule],
   providers: [CityService],
+  controllers: [CityController],
   exports: [CityService],
 })
 export class CityModule {}

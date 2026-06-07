@@ -18,6 +18,8 @@ import { CommonModule } from './modules/common/common.module';
 import { PrivateChatMiddleware } from './middleware/chat-type.middleware';
 import { BroadcastModule } from './modules/broadcast/broadcast.module';
 import { EventDetailModule } from './modules/event-detail/event-detail.module';
+import { CapturedGroupModule } from './modules/captured-group/captured-group.module';
+import { CapturedGroupService } from './modules/captured-group/captured-group.service';
 
 // Load environment variables
 config();
@@ -32,8 +34,8 @@ config();
   imports: [
     ConfigModule.forRoot(),
     TelegrafModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
+      imports: [ConfigModule, CapturedGroupModule],
+      useFactory: (configService: ConfigService, capturedGroupService: CapturedGroupService) => {
         const token = configService.get<string>('TELEGRAM_BOT_TOKEN');
         if (!token) {
           throw new Error('TELEGRAM_BOT_TOKEN is not defined in the environment variables');
@@ -49,10 +51,12 @@ config();
                   },
                 }
               : {},
-          middlewares: [new PrivateChatMiddleware().use()],
+          // Passive group-capture runs FIRST (always calls next()), then the
+          // existing private-chat gate, then all @On/@Command/@Start handlers.
+          middlewares: [capturedGroupService.middleware(), new PrivateChatMiddleware().use()],
         };
       },
-      inject: [ConfigService],
+      inject: [ConfigService, CapturedGroupService],
     }),
 
     UserModule,
@@ -63,6 +67,7 @@ config();
     CountryModule,
     CityModule,
     EventDetailModule,
+    CapturedGroupModule,
   ],
 
   controllers: [AppController],

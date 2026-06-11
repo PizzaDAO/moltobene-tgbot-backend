@@ -185,10 +185,17 @@ export class WelcomeService {
       });
 
       return;
-    } else if (startPayload && startPayload.startsWith('rsvp_')) {
-      // Deep link from rsvpizza: link this Telegram chat to a host's event so they
-      // receive PizzaDAO host announcements. Confirms the link back to rsvpizza.
-      const token = startPayload.slice(5);
+    } else if (
+      startPayload &&
+      (startPayload.startsWith('rsvp_') || startPayload.startsWith('submit_'))
+    ) {
+      // Deep link from rsvpizza: link this Telegram chat to a host's event.
+      //  - rsvp_<token>   → host opts in to PizzaDAO announcements.
+      //  - submit_<token> → unlinked host (reached via the group chat) connects
+      //    so they can reply with receipts/photos/headcount and have moltobene
+      //    forward them to rsvpizza. Same link-host call; submission-flavored reply.
+      const isSubmit = startPayload.startsWith('submit_');
+      const token = isSubmit ? startPayload.slice(7) : startPayload.slice(5);
       const chatId = ctx.from?.id;
 
       try {
@@ -203,9 +210,16 @@ export class WelcomeService {
         const data = (response.data ?? {}) as { ok?: boolean; partyName?: string };
 
         if (data.ok) {
-          await ctx.reply(
-            "✅ Connected — you'll now receive PizzaDAO host announcements.",
-          );
+          if (isSubmit) {
+            await ctx.replyWithMarkdownV2(
+              "You're connected\\! 🍕 Now just send me your *receipt photo*, an *event photo*, " +
+                "or type your *headcount*, and I'll add it to your event — no login needed\\.",
+            );
+          } else {
+            await ctx.reply(
+              "✅ Connected — you'll now receive PizzaDAO host announcements.",
+            );
+          }
         } else {
           await ctx.reply(
             'That link is invalid or expired — ask your underboss for a fresh one.',

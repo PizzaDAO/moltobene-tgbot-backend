@@ -9,6 +9,7 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Help, On, Update } from 'nestjs-telegraf';
 import { WelcomeService } from '../welcome/welcome.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
+import { HostInboundService } from '../host-inbound/host-inbound.service';
 import { TUserFlow, IUserState } from './common.interface';
 import { getContextTelegramUserId } from 'src/utils/context';
 
@@ -29,6 +30,8 @@ export class CommonService {
     private readonly welcomeService: WelcomeService,
     @Inject(forwardRef(() => BroadcastService))
     private readonly broadcastService: BroadcastService,
+    @Inject(forwardRef(() => HostInboundService))
+    private readonly hostInboundService: HostInboundService,
   ) {}
 
   /**
@@ -77,6 +80,12 @@ export class CommonService {
     } else if (state.flow === 'welcome') {
       await this.welcomeService.handlePrivateChat(ctx);
     } else {
+      // Idle / no-active-flow private chat: a bare number (e.g. "120") from a
+      // host is treated as a headcount submission and forwarded to rsvpizza.
+      // Anything else falls through to the existing private-chat handler.
+      const forwarded = await this.hostInboundService.tryForwardBareNumber(ctx);
+      if (forwarded) return;
+
       await this.welcomeService.handlePrivateChat(ctx);
     }
   }

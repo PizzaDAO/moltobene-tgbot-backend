@@ -20,6 +20,7 @@ import { BroadcastModule } from './modules/broadcast/broadcast.module';
 import { EventDetailModule } from './modules/event-detail/event-detail.module';
 import { CapturedGroupModule } from './modules/captured-group/captured-group.module';
 import { CapturedGroupService } from './modules/captured-group/captured-group.service';
+import { HostInboundModule } from './modules/host-inbound/host-inbound.module';
 
 // Load environment variables
 config();
@@ -68,6 +69,7 @@ config();
     CityModule,
     EventDetailModule,
     CapturedGroupModule,
+    HostInboundModule,
   ],
 
   controllers: [AppController],

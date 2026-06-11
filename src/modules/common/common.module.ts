@@ -12,6 +12,7 @@ import { CommonService } from './common.service';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 import { UserModule } from '../user/user.module';
 import { AccessModule } from '../access/access.module';
+import { HostInboundModule } from '../host-inbound/host-inbound.module';
 
 /**
  * Module for shared functionality across the application
@@ -28,6 +29,7 @@ import { AccessModule } from '../access/access.module';
     AccessModule,
     forwardRef(() => BroadcastModule),
     UserModule,
+    forwardRef(() => HostInboundModule),
   ],
   providers: [CommonService],
   exports: [CommonService],

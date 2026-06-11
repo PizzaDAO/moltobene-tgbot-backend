@@ -31,7 +31,7 @@ interface IForwardHostInbound {
    * are forwarded as `kind: 'photo'` with this hint, real photos as `image/jpeg`.
    */
   mimeType?: string;
-  /** Raw text payload (text kind only — currently a bare headcount number). */
+  /** Raw text payload (text kind only — a bare headcount number or a wallet address). */
   text?: string;
 }
 
@@ -200,14 +200,22 @@ export class HostInboundService {
   }
 
   /**
-   * Forwards a BARE NUMBER text DM (e.g. a headcount) to rsvpizza when the user
-   * is in a private chat and NOT inside an active flow. Called from
-   * CommonService's `@On('message')` idle branch so it doesn't compete with the
+   * Forwards a host SUBMISSION TEXT DM to rsvpizza when the user is in a private
+   * chat and NOT inside an active flow. Called from CommonService's
+   * `@On('message')` idle branch so it doesn't compete with the
    * registration/edit text handlers in WelcomeService.handlePrivateChat.
+   *
+   * Two text shapes are forwarded (rsvpizza classifies which is which and replies):
+   *   - HEADCOUNT: a bare number `^\d{1,6}$` (e.g. "120").
+   *   - WALLET ADDRESS: an EVM address `^0x[0-9a-fA-F]{40}$` or an ENS name
+   *     `^[a-z0-9-]+\.eth$` (case-insensitive) — supports rsvpizza's wallet-via-DM.
+   *
+   * Anything else returns false and falls through to handlePrivateChat unchanged,
+   * so we never forward arbitrary chatter.
    * @param {Context} ctx - The Telegraf context.
-   * @returns {Promise<boolean>} True if the message was handled as a headcount.
+   * @returns {Promise<boolean>} True if the message was forwarded as a submission.
    */
-  async tryForwardBareNumber(ctx: Context): Promise<boolean> {
+  async tryForwardSubmissionText(ctx: Context): Promise<boolean> {
     if (ctx.chat?.type !== 'private') return false;
     if (!ctx.from?.id) return false;
     if (!ctx.message || !('text' in ctx.message) || typeof ctx.message.text !== 'string') {
@@ -215,7 +223,10 @@ export class HostInboundService {
     }
 
     const text = ctx.message.text.trim();
-    if (!/^\d{1,6}$/.test(text)) return false;
+    const isHeadcount = /^\d{1,6}$/.test(text);
+    const isEvmAddress = /^0x[0-9a-fA-F]{40}$/.test(text);
+    const isEnsName = /^[a-z0-9-]+\.eth$/i.test(text);
+    if (!isHeadcount && !isEvmAddress && !isEnsName) return false;
 
     const userId = getContextTelegramUserId(ctx);
     if (!userId) return false;

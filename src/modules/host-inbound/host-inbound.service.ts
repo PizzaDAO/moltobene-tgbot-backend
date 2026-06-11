@@ -120,6 +120,60 @@ export class HostInboundService {
   }
 
   /**
+   * Forwards an inbound host IMAGE DOCUMENT to rsvpizza when the user is in a
+   * private chat and NOT inside an active broadcast/registration flow.
+   *
+   * Telegram delivers forwarded or uncompressed ("send as file") images as a
+   * `document`, not a `photo`, so the `@On('photo')` handler above never fires
+   * for them and the submission was silently dropped. This mirrors `onHostPhoto`
+   * but reads `ctx.message.document` and only acts on `image/*` MIME types
+   * (PDFs/other files are out of scope — the OCR pipeline is image-vision only).
+   *
+   * It forwards with `kind: 'photo'` because rsvpizza downloads any `file_id`
+   * via getFile and OCRs it identically regardless of how Telegram delivered it.
+   *
+   * This runs alongside the broadcast module's own `@On('document')` handler,
+   * which only acts when `session.step === 'creating_post'` and otherwise returns
+   * early. We additionally guard on private-chat + no-active-session so the two
+   * never collide.
+   * @param {Context} ctx - The Telegraf context.
+   * @returns {Promise<void>}
+   */
+  @On('document')
+  async onHostDocument(@Ctx() ctx: Context): Promise<void> {
+    // Only private chats; never groups.
+    if (ctx.chat?.type !== 'private') return;
+    if (!ctx.from?.id) return;
+    if (!ctx.message || !('document' in ctx.message)) return;
+
+    const doc = ctx.message.document;
+    // Images only — PDFs/other files are out of scope (OCR is image-vision only).
+    const mime = doc.mime_type || '';
+    if (!mime.startsWith('image/')) return;
+
+    const userId = getContextTelegramUserId(ctx);
+    if (!userId) return;
+
+    // Never collide with broadcast post-creation or registration flows.
+    if (!(await this.hasNoActiveSession(userId))) return;
+
+    // Optional instant ack so the bot isn't silent during OCR. rsvpizza sends
+    // the real "✅ added" confirmation.
+    try {
+      await ctx.reply('📥 Got it, processing…');
+    } catch {
+      // Acks are best-effort; ignore failures.
+    }
+
+    await this.forwardHostInbound({
+      chatId: ctx.from.id,
+      kind: 'photo',
+      fileId: doc.file_id,
+      fileUniqueId: doc.file_unique_id,
+    });
+  }
+
+  /**
    * Forwards a BARE NUMBER text DM (e.g. a headcount) to rsvpizza when the user
    * is in a private chat and NOT inside an active flow. Called from
    * CommonService's `@On('message')` idle branch so it doesn't compete with the

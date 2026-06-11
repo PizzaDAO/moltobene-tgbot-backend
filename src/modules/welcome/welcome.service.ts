@@ -190,26 +190,73 @@ export class WelcomeService {
       (startPayload.startsWith('rsvp_') || startPayload.startsWith('submit_'))
     ) {
       // Deep link from rsvpizza: link this Telegram chat to a host's event.
-      //  - rsvp_<token>   → host opts in to PizzaDAO announcements.
-      //  - submit_<token> → unlinked host (reached via the group chat) connects
-      //    so they can reply with receipts/photos/headcount and have moltobene
-      //    forward them to rsvpizza. Same link-host call; submission-flavored reply.
+      //  - rsvp_<token>   → host opts in to PizzaDAO announcements (purpose 'announce').
+      //  - submit_<token> → tapper reached via the group chat connects so they can
+      //    reply with receipts/photos/headcount and have moltobene forward them
+      //    (purpose 'submit'). Same link-host call; submission-flavored reply.
+      //
+      // rsvpizza decides the role server-side from the tapper's Telegram identity:
+      // only a tapper whose @handle matches the party host becomes the verified
+      // 'host'; anyone else who taps a group submit link becomes a photo-only
+      // 'contributor'. We send identity + purpose and reply based on the returned
+      // role. We stay tolerant of an OLD rsvpizza that doesn't return `role`
+      // (falls back to the prior generic replies) so a deploy-order gap can't
+      // break linking.
       const isSubmit = startPayload.startsWith('submit_');
       const token = isSubmit ? startPayload.slice(7) : startPayload.slice(5);
       const chatId = ctx.from?.id;
+      const purpose = isSubmit ? 'submit' : 'announce';
+
+      const invalidLinkMsg =
+        'That link is invalid or expired — ask your underboss for a fresh one.';
 
       try {
         const response = await axios.post(
           `${process.env.RSVPIZZA_BASE_URL}/api/telegram/link-host`,
-          { token, chatId },
+          {
+            token,
+            chatId,
+            username: ctx.from?.username ?? null,
+            telegramUserId: ctx.from?.id ?? null,
+            purpose,
+          },
           {
             headers: { 'x-api-key': process.env.TELEGRAM_LINK_CALLBACK_SECRET ?? '' },
           },
         );
 
-        const data = (response.data ?? {}) as { ok?: boolean; partyName?: string };
+        const data = (response.data ?? {}) as {
+          ok?: boolean;
+          role?: string;
+          partyName?: string;
+          reason?: string;
+        };
 
-        if (data.ok) {
+        const partyName = data.partyName;
+
+        if (data.role === 'host') {
+          // Verified host (handle matched). Can submit receipts/attendance/wallet.
+          await ctx.reply(
+            partyName
+              ? `✅ You're connected as host of ${partyName}! Send me your receipt photo, an event photo, or type your headcount and I'll add it.`
+              : "✅ You're connected as host! Send me your receipt photo, an event photo, or type your headcount and I'll add it.",
+          );
+        } else if (data.role === 'contributor') {
+          // Photo-only contributor (handle did not match the host).
+          await ctx.replyWithMarkdownV2(
+            partyName
+              ? `✅ Thanks for helping document ${partyName}\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\)`
+              : "✅ Thanks for helping document this event\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\)",
+          );
+        } else if (data.ok === false && data.reason === 'not_host') {
+          // Unverified announce: tapper isn't the party host.
+          await ctx.reply(
+            partyName
+              ? `I couldn't verify you as the host of ${partyName}. Make sure your Telegram @handle is set on your rsv.pizza profile and matches this account, or ask your underboss for help.`
+              : "I couldn't verify you as the host. Make sure your Telegram @handle is set on your rsv.pizza profile and matches this account, or ask your underboss for help.",
+          );
+        } else if (data.ok) {
+          // Back-compat: OLD rsvpizza returns { ok:true } with no role.
           if (isSubmit) {
             await ctx.replyWithMarkdownV2(
               "You're connected\\! 🍕 Now just send me your *receipt photo*, an *event photo*, " +
@@ -221,15 +268,12 @@ export class WelcomeService {
             );
           }
         } else {
-          await ctx.reply(
-            'That link is invalid or expired — ask your underboss for a fresh one.',
-          );
+          // ok === false with reason 'invalid token' (or any other) → generic.
+          await ctx.reply(invalidLinkMsg);
         }
       } catch (error) {
         console.error('Failed to link rsvpizza host via deep link:', error);
-        await ctx.reply(
-          'That link is invalid or expired — ask your underboss for a fresh one.',
-        );
+        await ctx.reply(invalidLinkMsg);
       }
 
       return;

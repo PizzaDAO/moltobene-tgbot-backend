@@ -8,7 +8,7 @@
 
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Context } from 'telegraf';
-import { Ctx, On, Update } from 'nestjs-telegraf';
+import { Ctx, Next, On, Update } from 'nestjs-telegraf';
 import axios from 'axios';
 import { CommonService } from '../common/common.service';
 import { getContextTelegramUserId } from 'src/utils/context';
@@ -25,6 +25,12 @@ interface IForwardHostInbound {
   fileId?: string;
   /** Telegram file_unique_id of the largest photo size (photo kind only). */
   fileUniqueId?: string;
+  /**
+   * MIME type of the forwarded media (photo kind only). rsvpizza uses this to
+   * decide whether to rasterize a PDF before OCR — `application/pdf` documents
+   * are forwarded as `kind: 'photo'` with this hint, real photos as `image/jpeg`.
+   */
+  mimeType?: string;
   /** Raw text payload (text kind only — currently a bare headcount number). */
   text?: string;
 }
@@ -80,23 +86,32 @@ export class HostInboundService {
    *
    * This runs alongside the broadcast module's own `@On('photo')` handler
    * (`BroadcastService.onPhoto`), which only acts when `session.step ===
-   * 'creating_post'` and otherwise returns early. We additionally guard on
-   * private-chat + no-active-session so the two never collide.
+   * 'creating_post'` and otherwise returns early. Since HostInboundModule is
+   * registered ahead of BroadcastModule, this handler runs FIRST: if the update
+   * is not an idle-private host submission we own, we call `next()` so broadcast
+   * (and any other downstream handler) still gets a chance to process it. We only
+   * consume (terminal, no next()) when we actually ack + forward.
    * @param {Context} ctx - The Telegraf context.
+   * @param {() => Promise<void>} next - Pass-through to downstream handlers.
    * @returns {Promise<void>}
    */
   @On('photo')
-  async onHostPhoto(@Ctx() ctx: Context): Promise<void> {
-    // Only private chats; never groups.
-    if (ctx.chat?.type !== 'private') return;
-    if (!ctx.from?.id) return;
-    if (!ctx.message || !('photo' in ctx.message) || ctx.message.photo.length === 0) return;
-
+  async onHostPhoto(@Ctx() ctx: Context, @Next() next: () => Promise<void>): Promise<void> {
     const userId = getContextTelegramUserId(ctx);
-    if (!userId) return;
 
-    // Never collide with broadcast post-creation or registration flows.
-    if (!(await this.hasNoActiveSession(userId))) return;
+    // Not an idle-private host photo submission → pass downstream (broadcast etc.).
+    if (
+      ctx.chat?.type !== 'private' ||
+      !ctx.from?.id ||
+      !ctx.message ||
+      !('photo' in ctx.message) ||
+      ctx.message.photo.length === 0 ||
+      !userId ||
+      !(await this.hasNoActiveSession(userId))
+    ) {
+      await next();
+      return;
+    }
 
     const p = ctx.message.photo;
     const best = p[p.length - 1];
@@ -111,11 +126,13 @@ export class HostInboundService {
       // Acks are best-effort; ignore failures.
     }
 
+    // Terminal: we consumed this update, do NOT call next().
     await this.forwardHostInbound({
       chatId: ctx.from.id,
       kind: 'photo',
       fileId,
       fileUniqueId,
+      mimeType: 'image/jpeg',
     });
   }
 
@@ -126,36 +143,43 @@ export class HostInboundService {
    * Telegram delivers forwarded or uncompressed ("send as file") images as a
    * `document`, not a `photo`, so the `@On('photo')` handler above never fires
    * for them and the submission was silently dropped. This mirrors `onHostPhoto`
-   * but reads `ctx.message.document` and only acts on `image/*` MIME types
-   * (PDFs/other files are out of scope — the OCR pipeline is image-vision only).
+   * but reads `ctx.message.document` and acts on `image/*` MIME types and on
+   * `application/pdf` (rsvpizza rasterizes the PDF before OCR using the mimeType
+   * hint). Other file types are out of scope and passed downstream.
    *
-   * It forwards with `kind: 'photo'` because rsvpizza downloads any `file_id`
-   * via getFile and OCRs it identically regardless of how Telegram delivered it.
+   * It forwards with `kind: 'photo'` (even for PDFs) because rsvpizza downloads
+   * any `file_id` via getFile and branches on `mimeType`, not `kind`, to decide
+   * whether to rasterize.
    *
    * This runs alongside the broadcast module's own `@On('document')` handler,
    * which only acts when `session.step === 'creating_post'` and otherwise returns
-   * early. We additionally guard on private-chat + no-active-session so the two
-   * never collide.
+   * early. Since HostInboundModule registers ahead of BroadcastModule, this runs
+   * FIRST: if the update is not an idle-private host document we own, we call
+   * `next()` so broadcast and other downstream handlers still run.
    * @param {Context} ctx - The Telegraf context.
+   * @param {() => Promise<void>} next - Pass-through to downstream handlers.
    * @returns {Promise<void>}
    */
   @On('document')
-  async onHostDocument(@Ctx() ctx: Context): Promise<void> {
-    // Only private chats; never groups.
-    if (ctx.chat?.type !== 'private') return;
-    if (!ctx.from?.id) return;
-    if (!ctx.message || !('document' in ctx.message)) return;
-
-    const doc = ctx.message.document;
-    // Images only — PDFs/other files are out of scope (OCR is image-vision only).
-    const mime = doc.mime_type || '';
-    if (!mime.startsWith('image/')) return;
-
+  async onHostDocument(@Ctx() ctx: Context, @Next() next: () => Promise<void>): Promise<void> {
     const userId = getContextTelegramUserId(ctx);
-    if (!userId) return;
+    const doc = ctx.message && 'document' in ctx.message ? ctx.message.document : undefined;
+    const mime = doc?.mime_type || '';
+    // Images and PDFs only — other file types are out of scope.
+    const isSupported = mime.startsWith('image/') || mime === 'application/pdf';
 
-    // Never collide with broadcast post-creation or registration flows.
-    if (!(await this.hasNoActiveSession(userId))) return;
+    // Not an idle-private supported host document → pass downstream (broadcast etc.).
+    if (
+      ctx.chat?.type !== 'private' ||
+      !ctx.from?.id ||
+      !doc ||
+      !isSupported ||
+      !userId ||
+      !(await this.hasNoActiveSession(userId))
+    ) {
+      await next();
+      return;
+    }
 
     // Optional instant ack so the bot isn't silent during OCR. rsvpizza sends
     // the real "✅ added" confirmation.
@@ -165,11 +189,13 @@ export class HostInboundService {
       // Acks are best-effort; ignore failures.
     }
 
+    // Terminal: we consumed this update, do NOT call next().
     await this.forwardHostInbound({
       chatId: ctx.from.id,
       kind: 'photo',
       fileId: doc.file_id,
       fileUniqueId: doc.file_unique_id,
+      mimeType: doc.mime_type,
     });
   }
 

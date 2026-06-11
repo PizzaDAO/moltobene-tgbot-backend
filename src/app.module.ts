@@ -61,6 +61,13 @@ config();
     }),
 
     UserModule,
+    // HostInboundModule must register BEFORE BroadcastModule/CommonModule so its
+    // @On('photo')/@On('document') media handlers get first dibs on the middleware
+    // chain. Broadcast's media handlers early-return without next() when the host
+    // isn't in a creating_post session, which would otherwise STOP the chain and
+    // starve host submissions (no ack, nothing forwarded). HostInbound now passes
+    // anything it doesn't consume downstream via @Next().
+    HostInboundModule,
     WelcomeModule,
     BroadcastModule,
     CommonModule,
@@ -69,7 +76,6 @@ config();
     CityModule,
     EventDetailModule,
     CapturedGroupModule,
-    HostInboundModule,
   ],
 
   controllers: [AppController],

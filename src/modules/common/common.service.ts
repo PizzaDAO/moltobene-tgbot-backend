@@ -80,10 +80,11 @@ export class CommonService {
     } else if (state.flow === 'welcome') {
       await this.welcomeService.handlePrivateChat(ctx);
     } else {
-      // Idle / no-active-flow private chat: a bare number (e.g. "120") from a
-      // host is treated as a headcount submission and forwarded to rsvpizza.
+      // Idle / no-active-flow private chat: a bare number (e.g. "120") OR a
+      // wallet address (EVM 0x… / ENS ….eth) from a host is forwarded to
+      // rsvpizza, which classifies headcount vs wallet and replies.
       // Anything else falls through to the existing private-chat handler.
-      const forwarded = await this.hostInboundService.tryForwardBareNumber(ctx);
+      const forwarded = await this.hostInboundService.tryForwardSubmissionText(ctx);
       if (forwarded) return;
 
       await this.welcomeService.handlePrivateChat(ctx);

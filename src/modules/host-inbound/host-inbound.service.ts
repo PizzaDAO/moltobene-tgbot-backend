@@ -25,6 +25,14 @@ interface IForwardHostInbound {
   fileId?: string;
   /** Telegram file_unique_id of the largest photo size (photo kind only). */
   fileUniqueId?: string;
+  /**
+   * MIME type of the forwarded document (photo kind only, document path).
+   * Used by rsvpizza to detect PDFs (`application/pdf`) which it must rasterize
+   * to an image before OCR (gpt-4o vision can't read a PDF via image_url).
+   * Absent for compressed photos and image documents (rsvpizza treats those as
+   * plain images). suppli-58533.
+   */
+  mimeType?: string;
   /** Raw text payload (text kind only — currently a bare headcount number). */
   text?: string;
 }
@@ -126,11 +134,14 @@ export class HostInboundService {
    * Telegram delivers forwarded or uncompressed ("send as file") images as a
    * `document`, not a `photo`, so the `@On('photo')` handler above never fires
    * for them and the submission was silently dropped. This mirrors `onHostPhoto`
-   * but reads `ctx.message.document` and only acts on `image/*` MIME types
-   * (PDFs/other files are out of scope — the OCR pipeline is image-vision only).
+   * but reads `ctx.message.document` and acts on `image/*` MIME types AND
+   * `application/pdf` (suppli-58533: hosts often have PDF receipts). Other file
+   * types stay out of scope.
    *
-   * It forwards with `kind: 'photo'` because rsvpizza downloads any `file_id`
-   * via getFile and OCRs it identically regardless of how Telegram delivered it.
+   * It forwards with `kind: 'photo'` (plus a `mimeType` so rsvpizza can tell a
+   * PDF from an image) because rsvpizza downloads any `file_id` via getFile and
+   * handles it from there — OCRing images directly and rasterizing PDFs to an
+   * image first before OCR.
    *
    * This runs alongside the broadcast module's own `@On('document')` handler,
    * which only acts when `session.step === 'creating_post'` and otherwise returns
@@ -147,9 +158,14 @@ export class HostInboundService {
     if (!ctx.message || !('document' in ctx.message)) return;
 
     const doc = ctx.message.document;
-    // Images only — PDFs/other files are out of scope (OCR is image-vision only).
+    // Accept images AND PDFs (suppli-58533). Belt-and-suspenders: some clients
+    // send a PDF with an empty/wrong mime_type, so also sniff the .pdf extension
+    // off the file_name. Everything else stays out of scope.
     const mime = doc.mime_type || '';
-    if (!mime.startsWith('image/')) return;
+    const fileName = doc.file_name || '';
+    const isImage = mime.startsWith('image/');
+    const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(fileName);
+    if (!isImage && !isPdf) return;
 
     const userId = getContextTelegramUserId(ctx);
     if (!userId) return;
@@ -170,6 +186,8 @@ export class HostInboundService {
       kind: 'photo',
       fileId: doc.file_id,
       fileUniqueId: doc.file_unique_id,
+      // Tell rsvpizza the real type so it can rasterize PDFs before OCR.
+      mimeType: isPdf ? 'application/pdf' : mime || undefined,
     });
   }
 

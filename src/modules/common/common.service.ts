@@ -6,7 +6,7 @@
 import RunCache from 'run-cache';
 import { Context } from 'telegraf';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { Help, On, Update } from 'nestjs-telegraf';
+import { Ctx, Help, Next, On, Update } from 'nestjs-telegraf';
 import { WelcomeService } from '../welcome/welcome.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { HostInboundService } from '../host-inbound/host-inbound.service';
@@ -69,9 +69,23 @@ export class CommonService {
    * @returns {Promise<void>}
    */
   @On('message')
-  async handleMessage(ctx: Context) {
+  async handleMessage(@Ctx() ctx: Context, @Next() next: () => Promise<void>) {
     const userId = getContextTelegramUserId(ctx);
     if (!userId) return;
+
+    // Slash-commands must reach their @Start/@Command handlers. This @On('message')
+    // router is terminal (never calls next()), so without this a command message —
+    // including the /start host-link deeplink (rsvp_/submit_<token>) — gets swallowed
+    // here and its handler never runs. /start carries the bind, so dispatch it directly
+    // (guaranteed); let any other command fall through to its handler via next().
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    if (text.startsWith('/start')) {
+      await this.welcomeService.handleStartCommand(ctx);
+      return;
+    }
+    if (text.startsWith('/')) {
+      return next();
+    }
 
     const state = (await this.getUserState(Number(userId))) || { flow: 'idle' as TUserFlow };
 

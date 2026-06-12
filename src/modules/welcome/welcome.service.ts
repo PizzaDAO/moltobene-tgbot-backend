@@ -245,8 +245,8 @@ export class WelcomeService {
           // Photo-only contributor (handle did not match the host).
           await ctx.replyWithMarkdownV2(
             partyName
-              ? `✅ Thanks for helping document ${partyName}\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\)`
-              : "✅ Thanks for helping document this event\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\)",
+              ? `✅ Thanks for helping document ${partyName}\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\) If you're the event host, add your Telegram @handle on your rsv\\.pizza profile so I can verify you\\.`
+              : "✅ Thanks for helping document this event\\! You can send me *event photos* and I'll add them\\. \\(Only the event host can submit receipts or attendance\\.\\) If you're the event host, add your Telegram @handle on your rsv\\.pizza profile so I can verify you\\.",
           );
         } else if (data.ok === false && data.reason === 'not_host') {
           // Unverified announce: tapper isn't the party host.
